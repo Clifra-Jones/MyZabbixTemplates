@@ -1,0 +1,418 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: bfd3b9df0bd743faa63e4e72f3fc92e9
+      name: Templates/Custom
+  templates:
+    - uuid: 558bb4e0af2d4f28a4c30999eba4cdea
+      template: 'Windows Process Monitoring by Zabbix Agent'
+      name: 'Windows Process Monitoring by Zabbix Agent'
+      description: 'Monitor processes'
+      groups:
+        - name: Templates/Custom
+      items:
+        - uuid: 888188f5383645e491296eaed47f2b30
+          name: 'Get processes'
+          key: 'proc.get[,,,process]'
+          value_type: TEXT
+          trends: '0'
+          description: 'performance Data metrics for all processes'
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  array = JSON.parse(value)
+                  array.sort(function(a,b) {
+                      alname = a.name.toLowerCase();
+                      blname = b.name.toLowerCase();
+                      if (alname < blname) {
+                          return -1;
+                      }
+                      if (alname > blname) {
+                          return 1;
+                      }
+                  });
+                  
+                  var procIndex = 0;
+                  uItems = {};
+                  
+                  for( var x in array) {
+                      procName = array[x].name.replace(".exe","");
+                      if (uItems[procName]) {
+                          procIndex += 1;
+                          procName = procName + "#" + procIndex;
+                          array[x].pname = procName;
+                      } else {
+                          procIndex = 0;
+                          uItems[procName] = procName;
+                          array[x].pname = procName;
+                      }
+                  }
+                  
+                  return JSON.stringify(array)
+          tags:
+            - tag: application
+              value: process
+            - tag: component
+              value: raw
+      discovery_rules:
+        - uuid: 238555b7fef148bf94b5cfc75a39fc82
+          name: 'Windows process discovery'
+          type: DEPENDENT
+          key: custom.process.discovery
+          delay: '0'
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#PNAME}'
+                value: '{$PROC.NAMES.MATCHES}'
+                formulaid: A
+              - macro: '{#PNAME}'
+                value: '{$PROC.NAMES.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+              - macro: '{#USER}'
+                value: '{$PROC.USER.MATCHES}'
+                formulaid: C
+              - macro: '{#USER}'
+                value: '{$PROC.USER.NOT_MATCHES}'
+                operator: NOT_MATCHES_REGEX
+                formulaid: D
+          lifetime: 1h
+          description: 'Discovery of Windows processes.'
+          item_prototypes:
+            - uuid: 8e5aeb67d8c54528b161961a2fd900cf
+              name: 'Process [{#NAME}]: Get data'
+              type: DEPENDENT
+              key: 'custom.proc.get[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              status: DISABLED
+              description: 'metrics collected during the process {#NAME}.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@["name"]=="{#NAME}")].first()'
+                  error_handler: CUSTOM_ERROR
+                  error_handler_params: 'Failed to retrieve process {#NAME} data'
+              master_item:
+                key: 'proc.get[,,,process]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: raw
+                - tag: process
+                  value: '{#NAME]'
+            - uuid: 04030ce1e83a40479ed62e6ce2352022
+              name: 'Process [{#PNAME}]: IO Data Bytes / Sec'
+              type: DEPENDENT
+              key: 'custom.proc.io.bytespersecl[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              units: B
+              description: 'Get CPU utilization for process {#NAME}'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.IODataBytesPersec
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: 3742414f63e2489497bc38970cb7097f
+              name: 'Process [{#PNAME}]: IO Read Bytes / Sec'
+              type: DEPENDENT
+              key: 'custom.proc.io.readbytespersec[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              units: B
+              description: 'Get CPU utilization for process {#NAME}'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.IOReadBytesPersec
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: b5aec491a4f34efab29724339ce009a5
+              name: 'Process [{#PNAME}]: IO Write Bytes / Sec'
+              type: DEPENDENT
+              key: 'custom.proc.io.writebytespersec[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              units: B
+              description: 'Process CPU privileged (SYSTEM) utilization'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.IOWriteBytesPersec
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: 75f71ab2cec04b4c869ac4905c066d04
+              name: 'Process [{#PNAME}]: CPU system utilization'
+              type: DEPENDENT
+              key: 'custom.proc.mem.cpu.system.util[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              description: 'Process {#NAME} user CPU utilization.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.PercentPrivilegedTime
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+              trigger_prototypes:
+                - uuid: 20ccd45b918f4ff78b8fbf3faa78d877
+                  expression: 'last(/Windows Process Monitoring by Zabbix Agent/custom.proc.mem.cpu.system.util[{#PNAME}])>{$PROC.CPU.CRIT}'
+                  name: 'Process [{#PNAME}]: CPU utilization greater than {$PROC.CPU.CRIT}'
+                  priority: HIGH
+                  description: 'CPU utilization for process {#PNAME} greater than {$PROC.CPU.CRIT}'
+                  tags:
+                    - tag: component
+                      value: cpu
+                    - tag: process
+                      value: '{#PNAME}'
+            - uuid: 90339e94a60648c5bbe8ada792bd4ce4
+              name: 'Process [{#PNAME}]: CPU user utilization'
+              type: DEPENDENT
+              key: 'custom.proc.mem.cpu.user.util[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              description: 'Process {#NAME} user CPU utilization.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.PercentUserTime
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: 19edeabefbee494cb7ba049548d56ccb
+              name: 'Process [{#PNAME}]: CPU utilization'
+              type: DEPENDENT
+              key: 'custom.proc.mem.cpu.util[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              description: 'Process {#NAME} user CPU utilization.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.PercentProcessorTime
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#NAME}'
+              trigger_prototypes:
+                - uuid: 967f551c8e5640239bfa53454173c57a
+                  expression: 'last(/Windows Process Monitoring by Zabbix Agent/custom.proc.mem.cpu.util[{#PNAME}])>{$PROC.CPU.WARN}'
+                  name: 'Process [{#PNAME}]: CPU Utilization greater than {$PROC.CPU.WARN}%'
+                  priority: AVERAGE
+                  description: 'CPU utilization for process {#PNAME} is greater than {$PROC.CPU.WARN}.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: component
+                      value: cpu
+                    - tag: process
+                      value: '{#PNAME}'
+            - uuid: 21262fcbc1a9408aa4502272011aec8f
+              name: 'Process [{#PNAME}]: Page faults / sec'
+              type: DEPENDENT
+              key: 'custom.proc.mem.pagefaults[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              description: 'Process {#NAME} user CPU utilization.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.PageFaultsPersec
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#NAME}'
+            - uuid: da7a7453e89d4be5b48b8f2fc8b7d395
+              name: 'Process [{#PNAME}]: Memory working set'
+              type: DEPENDENT
+              key: 'custom.proc.mem.used.private[{#PNAME}]'
+              delay: '0'
+              value_type: FLOAT
+              status: DISABLED
+              units: B
+              description: 'Process {#NAME} user CPU utilization.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.WorkingSet
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: cpu
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: 114fcd3fe401477d99ed8fdeaa1a891b
+              name: 'Process [{#PNAME}]: Memory Used'
+              type: DEPENDENT
+              key: 'custom.proc.mem.used[{#PNAME}]'
+              delay: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.WorkingSetPrivate
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: memory
+                - tag: process
+                  value: '{#PNAME}'
+            - uuid: 059aacf5b59043b7b11006e8c4487041
+              name: 'Process [{#PNAME}]: Memory utilization'
+              type: CALCULATED
+              key: 'custom.proc.mem.util[{#PNAME}]'
+              history: 1h
+              value_type: FLOAT
+              units: '%'
+              params: '(last(//custom.proc.mem.used[{#PNAME}])/last(//vm.memory.size[total]))*100'
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: memory
+                - tag: process
+                  value: '{#PNAME}]'
+              trigger_prototypes:
+                - uuid: 3ff184ecc0a242c99edd843e6b6285db
+                  expression: 'last(/Windows Process Monitoring by Zabbix Agent/custom.proc.mem.util[{#PNAME}])>{$PROC.MEM.CRIT}'
+                  name: 'Process [{#PNAME}]: Memory utilization greater than {$PROC.MEM.CRIT}'
+                  priority: HIGH
+                  description: 'Memory utilization for process {#PNAME} is greater than {$PROC.MEM.CRIT}.'
+                  tags:
+                    - tag: component
+                      value: memory
+                    - tag: process
+                      value: '{#PNAME}'
+                - uuid: ddaf2bbca5574c9d83b7d869402bd1fb
+                  expression: 'last(/Windows Process Monitoring by Zabbix Agent/custom.proc.mem.util[{#PNAME}])>{$PROC.MEM.WARN}'
+                  name: 'Process [{#PNAME}]: Memory utilization greater than {$PROC.MEM.WARM}'
+                  priority: AVERAGE
+                  description: 'Memory utilization for process {#PNAME} is greater than {$PROC.MEM.WARN}'
+                  tags:
+                    - tag: component
+                      value: memory
+                    - tag: process
+                      value: '{#PNAME}'
+            - uuid: 50e44dee33f743159533a6ed37cf308c
+              name: 'Process [{#PNAME}]: Get performance Data'
+              key: 'wmi.getall[root\cimv2,"Select * From Win32_PerfFormattedData_PerfProc_Process where Name = ''{#PNAME}''"]'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: STR_REPLACE
+                  parameters:
+                    - '['
+                    - ''
+                - type: STR_REPLACE
+                  parameters:
+                    - ']'
+                    - ''
+              tags:
+                - tag: application
+                  value: process
+                - tag: component
+                  value: raw
+                - tag: process
+                  value: '{#PNAME}'
+          master_item:
+            key: 'proc.get[,,,process]'
+          lld_macro_paths:
+            - lld_macro: '{#NAME}'
+              path: $.name
+            - lld_macro: '{#PNAME}'
+              path: $.pname
+            - lld_macro: '{#USER}'
+              path: $.user
+      macros:
+        - macro: '{$PROC.CPU.CRIT}'
+          value: '50'
+          description: 'Process CPU % critical threshold.'
+        - macro: '{$PROC.CPU.WARN}'
+          value: '40'
+          description: 'Process CPU % warning threshold.'
+        - macro: '{$PROC.MEM.CRIT}'
+          value: '40'
+          description: 'Process memory % warning threshold'
+        - macro: '{$PROC.MEM.WARN}'
+          value: '30'
+          description: 'Process memory % warning threshold.'
+        - macro: '{$PROC.NAMES.MATCHES}'
+          value: '^.*$'
+          description: 'A Regex expression that will match process names to be monitored. i.e ^{?:Name1,Name2,Name2.+)$  + is a wildcard. Names are case sensitive.'
+        - macro: '{$PROC.NAMES.NOT_MATCHES}'
+          value: '^[.*]$'
+          description: 'A regex expression that matches the process names to not be monitored. Same as above but names will not be matched. To "not" match any name use ^[.*]$'
+        - macro: '{$PROC.USER.MATCHES}'
+          value: '^(?:SYSTEM|NETWORK SERVICE)$'
+          description: 'A Regex expression that will match the processes users you want to monitor.'
+        - macro: '{$PROC.USER.NOT_MATCHES}'
+          value: '^[.*]$'
+          description: 'A Regex expression that will match the processes users you do not want to monitor.'
