@@ -1,0 +1,61 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: aca8bb1e6c344e6fa7b4af1b1956aaed
+      template: 'Additional Event Log Items'
+      name: 'Additional Event Log Items'
+      description: 'Additional event log monitoring. Add new even log items here.'
+      groups:
+        - name: Templates
+      items:
+        - uuid: 7f2b7b56aa7c4062bb7851ca0454c24a
+          name: 'Application Error'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[Application,,Error,"Application Error",1000,,skip]'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          description: 'Detect Jitterbit application Crash.'
+          tags:
+            - tag: component
+              value: logs
+          triggers:
+            - uuid: 44bed35ccc1e434b88d1ee9bd77a4334
+              expression: 'logeventid(/Additional Event Log Items/eventlog[Application,,Error,"Application Error",1000,,skip],,1000)=1'
+              name: 'Application Crash Detected'
+              event_name: 'Application Crash Detected'
+              priority: HIGH
+              description: 'Report Jitterbit Application Crash'
+              manual_close: 'YES'
+              tags:
+                - tag: component
+                  value: log
+                - tag: event
+                  value: crash
+        - uuid: 72967aa3702f44fe930946b892623d89
+          name: 'Resource Exhaustion Detected'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[System,,Warning,Resource-Exhaustion-Detector,2004,,skip]'
+          history: 90d
+          value_type: LOG
+          trends: '0'
+          description: 'Detect resource exhaustion.'
+          tags:
+            - tag: component
+              value: logs
+          triggers:
+            - uuid: fd71a44fa0b6453b8bee43f8ed6a4016
+              expression: 'logeventid(/Additional Event Log Items/eventlog[System,,Warning,Resource-Exhaustion-Detector,2004,,skip],,"2004")=1'
+              name: 'Resource Exhaustion Detected'
+              event_name: 'Resource Exhaustion Detected'
+              priority: HIGH
+              description: 'Report high alert on resource exhaustion events'
+              manual_close: 'YES'
+              tags:
+                - tag: component
+                  value: log
+                - tag: event
+                  value: exhaustion
