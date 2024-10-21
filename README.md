@@ -35,3 +35,8 @@ As stated earlier, care should be taken to not monitor too many processes.
 ### Windows by Zabbix Agent
 
 This is a modified version of the Windows by ZAbbix Agent template we have modified for our use.
+
+### Additional Event Log Items
+
+This is a custom template we use to monitor specific events. You can clone the items and create ones for your specific needs. Then clone the triggers for your needs.
+Once customized you can delete the original items.
